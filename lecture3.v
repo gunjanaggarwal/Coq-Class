@@ -610,3 +610,83 @@ SearchAbout (rev).
     reflexivity.
   Qed.
   End PSET2_EX1.
+
+
+Module PSET2_EX2.
+(** 
+Modeling.
+Consider the following famous puzzle, taken from Raymond E. 
+Smullyan's book, "What is the name of this book?".
+Portia's suitor is asked to solve a following puzzle to prove his worth.
+Her portrait is placed in one of three sealed caskets, gold, 
+silver, and lead. Each casket has an inscription, but only one of the
+ three inscriptions is true. The inscriptions read as follows:
+Gold : "The portrait is in this casket" 
+Silver : "The portrait is not in this casket" 
+Lead : "The portrait is not in the gold casket"
+Your task is to formalize the puzzle in Coq and prove the answer correct. 
+hints: You can use a Variable declaration to introduce 
+unknown variables and assumptions local to a section.
+*)
+
+Section SmullyanPuzzle.
+
+(** Sections are a convenient way to develop theories 
+that are universally quantified over some variables.
+*)
+Inductive chest : Type :=
+  | Silver
+  | Gold 
+  | Lead.
+
+(** Unlike an axiom, Variables are just universally 
+quantified in the items in this section below that mention them. 
+See the output of Check ItsSilver after the section is closed.
+*)
+Variable location : chest.
+
+(** 
+Replace this variable with a Definition.
+Variable inChest: chest -> Prop.
+*)
+
+Definition inChest (c: chest) :  Prop:= location=c.
+
+
+(**  Give a definition for the inscriptions on the chests.
+*)
+Definition inscription (c: chest): Prop :=
+match c with 
+|Gold => inChest c
+|Silver => ~(inChest c)
+|Lead => ~(inChest Gold)
+end.
+
+(** Capture the assumption that only one chest is truthful.
+*)
+Definition assumption : Prop :=
+forall c1 c2, inscription c1 -> inscription c2 -> c1=c2.
+
+
+
+Theorem ItsSilver : assumption -> inChest Silver.
+Proof.
+  intros. unfold inChest.
+  remember location as ll. destruct ll.
+  - reflexivity.
+  - unfold assumption in H. apply H.
+    * simpl. compute. rewrite Heqll. reflexivity.
+    * simpl. compute. subst. intros. discriminate.
+  -unfold assumption in H. apply H.
+    * simpl. compute. subst. intros. discriminate.
+    * simpl. compute. subst. intros. discriminate.
+Qed.
+(**
+ simpl in *;  unfold inChest; auto.
+    subst. congruence.
+    apply (f_equal (fun c => match c with Gold => True | _ => False end)) in Heq.
+    rewrite <- Heq. exact I. exact
+unfold inChest. unfold assumption in H. inversion H.
+*)
+End SmullyanPuzzle.
+Check assumption.
