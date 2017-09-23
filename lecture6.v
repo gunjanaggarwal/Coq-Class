@@ -268,9 +268,110 @@ destruct H1. eapply (or_introl ) in IHa1. destruct IHa1.
   destruct (string_dec x v) ; crush.
   destruct (contains x a1) ; crush.
 *)
-Qed.  
+Qed.
 
-(** We can commute assignments x:=ax; y:=ay  as long as the
+(** 
+Problem Set 3
+In class we saw a relational small-step semantics for IMP. 
+Abhishek observed that the small-step semantics could be written
+as a function instead, since there is no recursion in the 'while' case.
+However, there is a loss of extensibility to some nondeterministic
+ features like concurrency.) Are these semantics really equivalent?
+Here is the relational semantics we saw in class:
+
+*)
+
+Inductive step_com : com -> state -> com -> state -> Prop := 
+| Step_assign: forall s x e,
+       step_com (Assign x e) s
+                (Skip) (set x (eval_aexp e s) s)
+| Step_seqL: forall c1 c2 c1' s s', step_com c1 s c1' s' ->
+                step_com (Seq c1 c2) s (Seq c1' c2) s'
+| Step_seqR: forall c s, step_com (Seq Skip c) s c s
+| Step_if_true: forall b c1 c2 s, eval_bexp b s = true ->
+                 step_com (If b c1 c2) s c1 s
+| Step_if_false: forall b c1 c2 s, eval_bexp b s = false ->
+                 step_com (If b c1 c2) s c2 s
+| Step_while: forall b c s,
+                 step_com (While b c) s
+                          (If b (Seq c (While b c)) Skip) s.
+
+SearchAbout (Some ).
+(** Problem1: Give a definition of the same small-step semantics,
+ as a function.
+*)
+
+Fixpoint  step_com_fn  (c: com) (s: state) : option (com * state) :=
+  match c with 
+    | Skip => None
+    | Assign v a => Some (Skip, (set v (eval_aexp a s) s))
+    | Seq c1 c2 => match (step_com_fn c1 s) with 
+                    | None => Some (c2, s) (** this is skip case*)
+                    | Some (c3, s1) => Some ((Seq c3 c2), s1)
+                   end
+    | If b c1 c2  => match eval_bexp b s with
+                        | true => Some (c1, s)
+                        | false => Some (c2, s)
+                       end
+    | While b c1 => match eval_bexp b s with
+                      | true => Some ((Seq c1 c), s)
+                      | false => Some (Skip, s)
+                    end
+   end.
+
+
+(** Prove that only Skip fails to step: *)
+Lemma progress : forall c s, step_com_fn c s = None -> c = Skip.
+Proof.
+  intro c.
+  induction c.
+(** ; intros; simpl in *; try( reflexivity); try (discriminate). *)
+  - intros. reflexivity. (**skip case*)
+  - intros. simpl in *. discriminate. (**Assign case*)
+  (**Seq case*)
+  - simpl in *. intros. destruct (step_com_fn c1 s) in H.
+    + destruct p. discriminate.
+    + discriminate.
+  - simpl in *. intros. destruct (eval_bexp b s) in H; discriminate.
+  - simpl in *. intros. remember ((eval_bexp b s)) as bb. 
+      destruct bb. 
+    + inversion H.
+    + discriminate.
+Qed.
+
+
+Lemma ss {A:Type} : forall (a b:A), Some a= Some b -> a =b.
+Proof using.
+  intros. inversion H. reflexivity.
+Qed.
+
+
+(** Prove that all steps in the functional semantics work in the
+   relational one.*) 
+Theorem forward_sim : forall c s c' s', 
+          step_com_fn c s = Some (c', s') -> step_com c s c' s'.
+Proof.
+ intro c. induction c.
+ * intros. simpl in *. discriminate.
+ * intros. simpl in *. myinv H. constructor.
+ * intros. simpl in *. remember (step_com_fn c1 s) as ss.
+   destruct ss.
+  + destruct p. myinv H. constructor. apply IHc1. 
+    symmetry in Heqss. assumption.
+  + inversion H. symmetry in Heqss. 
+    apply progress in Heqss. subst. constructor.
+ * intros. simpl in H. remember (eval_bexp b s) as bb.
+   destruct bb; myinv H; symmetry in Heqbb; constructor; apply Heqbb.
+ * intros. simpl in H. Print step_com. remember (eval_bexp b s) as bb.
+   destruct bb.
+   + myinv H. symmetry in Heqbb. Print step_com. 
+     remember (Seq c (While b c)) as if_st. apply (If b (Seq c (While b c)) Skip) .  
+     apply (If b (Seq c (While b c)) Skip) in Heqif_st. 
+     
+     assert (If b (Seq c (While b c)) Skip).
+
+
+(** We can commute assignments x:=ax; y:=ay  as long as the 
    variables don't overlap. *)
 Lemma assign_comm : 
   forall x ax y ay s1 s2,
@@ -278,11 +379,12 @@ Lemma assign_comm :
     contains x ay = false -> 
     contains y ax = false -> 
     x <> y -> 
-    forall s3, eval_com (Seq (Assign y ay) (Assign x ax)) s1 s3 -> s2 = s3.
+    forall s3, eval_com (Seq (Assign y ay) (Assign x ax)) s1 s3 -> s2 = s3..
 (*
                forall z, get z s3 = get z s2.
 *)
 Proof.
+  
   intros.
   repeat eval_inv.
   repeat unfold set, get.
