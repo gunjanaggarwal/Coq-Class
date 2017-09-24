@@ -313,10 +313,7 @@ Fixpoint  step_com_fn  (c: com) (s: state) : option (com * state) :=
                         | true => Some (c1, s)
                         | false => Some (c2, s)
                        end
-    | While b c1 => match eval_bexp b s with
-                      | true => Some ((Seq c1 c), s)
-                      | false => Some (Skip, s)
-                    end
+    | While b c1 => Some ((If b (Seq c1 (While b c1)) Skip), s)
    end.
 
 
@@ -364,11 +361,25 @@ Proof.
    destruct bb; myinv H; symmetry in Heqbb; constructor; apply Heqbb.
  * intros. simpl in H. Print step_com. remember (eval_bexp b s) as bb.
    destruct bb.
-   + myinv H. symmetry in Heqbb. Print step_com. 
-     remember (Seq c (While b c)) as if_st. apply (If b (Seq c (While b c)) Skip) .  
-     apply (If b (Seq c (While b c)) Skip) in Heqif_st. 
-     
-     assert (If b (Seq c (While b c)) Skip).
+   + myinv H. symmetry in Heqbb. constructor.
+   + myinv H. constructor.
+Qed.
+
+
+Theorem backward_sim : forall c s c' s', 
+  step_com c s c' s' -> step_com_fn c s = Some (c', s').
+Proof.
+intro c. induction c; intros; myinv H; try (reflexivity).
+* remember (step_com_fn c1 s) as stf. 
+    destruct stf.
+    - destruct p. apply IHc1 in H5. 
+      rewrite H5 in Heqstf. myinv Heqstf. reflexivity.
+    - symmetry in Heqstf. apply progress in Heqstf. 
+      subst. myinv H5.
+* rewrite H6; reflexivity.
+* rewrite H6; reflexivity.
+
+
 
 
 (** We can commute assignments x:=ax; y:=ay  as long as the 
@@ -384,7 +395,6 @@ Lemma assign_comm :
                forall z, get z s3 = get z s2.
 *)
 Proof.
-  
   intros.
   repeat eval_inv.
   repeat unfold set, get.
