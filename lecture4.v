@@ -30,6 +30,7 @@
 #</small>#
 *)
 
+
 Require Import Bool Arith List CpdtTactics.
 Require Import Unicode.Utf8.
 
@@ -48,11 +49,14 @@ Set Implicit Arguments.
     a data structure representing one.
   *)
 Inductive binop : Type := Plus | Times.
+Check binop.
+Check Plus.
+Inductive ternop: Type := If.
 
 Inductive exp : Type := 
 | Const : nat -> exp
-| Binop : binop -> exp -> exp -> exp.
-
+| Binop : binop -> exp -> exp -> exp
+| Ternop: ternop -> exp -> exp -> exp -> exp.
 
 (** Using Coq, we can describe the _meaning_ of the computation
     denoted by an abstract syntax tree. We can think of this
@@ -65,10 +69,24 @@ Definition binopDenote (b:binop) : nat -> nat -> nat :=
     | Times => mult
   end.
 
+Print eq.
+Print le.
+
+Definition ternopDenote (b:ternop) : nat -> nat -> nat -> nat := 
+  match b with 
+    | If => fun (e1 e2 e3 : nat) => match e1 with 
+                      | 0 => e2
+                      | S n => e3
+                    end
+  end.
+
+Eval compute in ternopDenote If 3 4 5.
+
 Fixpoint expDenote (e:exp) : nat := 
   match e with 
     | Const n => n
     | Binop b e1 e2 => (binopDenote b) (expDenote e1) (expDenote e2)
+    | Ternop b e1 e2 e3 => (ternopDenote b) (expDenote e1) (expDenote e2)(expDenote e3)
   end.
 
 (** Now let's define a stack-machine target language for a
@@ -78,7 +96,8 @@ Fixpoint expDenote (e:exp) : nat :=
 
 Inductive instr : Type := 
 | iConst : nat -> instr
-| iBinop : binop -> instr.
+| iBinop : binop -> instr
+| iTernop: ternop -> instr.
 
 Definition prog := list instr.
 Definition stack := list nat.
@@ -97,6 +116,11 @@ Definition instrDenote (i:instr) (s:stack) : option stack :=
         | arg1 :: arg2 :: s' => Some ((binopDenote b) arg1 arg2::s')
         | _ => None
       end
+    | iTernop b =>
+      match s with 
+        | arg1 :: arg2 :: arg3 :: s' => Some ((ternopDenote b) arg1 arg2 arg3 :: s')
+        | _ => None
+end
   end.
 
 Fixpoint progDenote (p:prog) (s:stack) : option stack := 
@@ -112,6 +136,7 @@ Fixpoint progDenote (p:prog) (s:stack) : option stack :=
 Eval compute in progDenote (iConst 3::iConst 4::iBinop Times::nil) nil.
 Import ListNotations.
 Eval compute in progDenote [iConst 3; iConst 4; iBinop Times] [].
+Eval compute in progDenote [iConst 3; iConst 4; iConst 5; iTernop If] [].
 
 (** Now let's write a compiler from the source language
     to the argument language! *)
@@ -120,24 +145,35 @@ Fixpoint compile (e:exp) : prog :=
   match e with 
     | Const n => [iConst n]
     | Binop b e1 e2 => compile e2 ++ compile e1 ++ iBinop b :: nil
+    | Ternop b e1 e2 e3 => compile e3 ++ compile e2 ++ compile e1 ++ iTernop b :: nil
   end.
 
 (** Wouldn't it be great if our compiler were correct? We can
     prove that by relating the denotations of the source program
     and its compilation. *)
 
-Theorem compile_correct : forall e, progDenote (compile e) nil = Some (expDenote e :: nil).
-Proof.
-  Lemma compile_correct' : forall e p s, 
+Lemma compile_correct'' : forall e p s, 
     progDenote (compile e ++ p) s = progDenote p (expDenote e::s).
   Proof.
+    induction e.
+    - simpl. reflexivity.
+    - simpl. intros. repeat rewrite <- app_assoc. rewrite IHe2. rewrite IHe1. simpl. reflexivity.
+    - simpl. intros. repeat rewrite <- app_assoc. rewrite IHe3. rewrite IHe2. rewrite IHe1. simpl. reflexivity.
+  Qed.
+
+Lemma compile_correct' : forall e p s, 
+    progDenote (compile e ++ p) s = progDenote p (expDenote e::s).
+  Proof. 
     (** [crush] is a magic tactic provided by [CPDT] that manages to knock off
        a lot of obligations for us.  Later, we will look at how [crush] is
        defined to build our own proof-automation.  But in some sense, this is
        the ideal proof in a readability-sense.  It's the equivalent of writing
        "by induction on e".  *)
     induction e ; crush.
-  Qed.
+    Qed.
+
+Theorem compile_correct : forall e, progDenote (compile e) nil = Some (expDenote e :: nil).
+Proof.  
 
   (** And now we can use this lemma to prove our desired theorem. *)  
   intros.
@@ -149,6 +185,7 @@ Qed.
 (***** Second example ******)
 
 Inductive type : Set := Nat | Bool.
+
 
 (** Notice that both [tbinop] and [texp] are *indexed* by [type]s.  That is
    to say, we are reflecting some structure in the types of the constructors.
