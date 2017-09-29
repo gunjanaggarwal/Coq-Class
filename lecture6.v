@@ -378,11 +378,11 @@ intro c. induction c; intros; myinv H; try (reflexivity).
       subst. myinv H5.
 * rewrite H6; reflexivity.
 * rewrite H6; reflexivity.
+Qed.
 
+Require Import Coq.Logic.FunctionalExtensionality.
 
-
-
-(** We can commute assignments x:=ax; y:=ay  as long as the 
+(** We can commute assignments x:=ax; y:=ay  as long as the
    variables don't overlap. *)
 Lemma assign_comm : 
   forall x ax y ay s1 s2,
@@ -390,7 +390,7 @@ Lemma assign_comm :
     contains x ay = false -> 
     contains y ax = false -> 
     x <> y -> 
-    forall s3, eval_com (Seq (Assign y ay) (Assign x ax)) s1 s3 -> s2 = s3..
+    forall s3, eval_com (Seq (Assign y ay) (Assign x ax)) s1 s3 -> s2 = s3.
 (*
                forall z, get z s3 = get z s2.
 *)
@@ -398,11 +398,16 @@ Proof.
   intros.
   repeat eval_inv.
   repeat unfold set, get.
-  destruct (string_dec x z) ; destruct (string_dec y z) ; try congruence.
-  specialize (eval_exp_set s1 y (eval_aexp ay s1) ax H1).
-  unfold set. crush.
-  specialize (eval_exp_set s1 x (eval_aexp ax s1) ay H0).
-  unfold set. crush.
+  apply functional_extensionality. intro z.
+  destruct (string_dec x z); destruct (string_dec y z); try congruence.
+  (**
+    Greg's proof
+  *)
+  - subst. pose proof (eval_exp_set s1 y (eval_aexp ay s1) ax H1). 
+    rewrite <- H.
+    unfold set, get. reflexivity.
+  - subst. pose proof (eval_exp_set s1 x (eval_aexp ax s1) ay H0).
+    rewrite <- H. unfold set, get. reflexivity.
 Qed.
 
 
@@ -426,4 +431,5 @@ Proof.
   Focus 2.
   rewrite <- H5.
   auto.
-  Admitted.
+  symmetry in H4. apply H4.
+  Qed.
