@@ -402,6 +402,10 @@ Proof.
   destruct (string_dec x z); destruct (string_dec y z); try congruence.
   (**
     Greg's proof
+    specialize (eval_exp_set s1 y (eval_aexp ay s1) ax H1).
+    unfold set. crush.
+    specialize (eval_exp_set s1 x (eval_aexp ax s1) ay H0).
+    unfold set. crush.
   *)
   - subst. pose proof (eval_exp_set s1 y (eval_aexp ay s1) ax H1). 
     rewrite <- H.
