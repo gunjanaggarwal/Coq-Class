@@ -437,3 +437,72 @@ Proof.
   auto.
   symmetry in H4. apply H4.
   Qed.
+
+Inductive steps_com : com -> state -> com -> state -> Prop :=
+| Steps_none : forall c s, steps_com c s c s
+| Steps_some : forall c s c' s' c'' s'', step_com c s c' s' ->
+                steps_com c' s' c'' s'' -> steps_com c s c'' s''.
+
+Hint Constructors steps_com step_com eval_com.
+Lemma concat_seq : forall c1 c2 s1 s2 s3,
+              steps_com c1 s1 Skip s2 ->
+               steps_com c2 s2 Skip s3 ->
+                steps_com (Seq c1 c2) s1 Skip s3.
+Proof.
+intros c1 c2 s1 s2 s3.
+remember Skip as ss.
+intros p. induction p; subst; eauto.
+Qed.
+
+Theorem big_to_small:
+  forall c s s',
+   eval_com c s s' -> steps_com c s Skip s'.
+Proof.
+intros c s s1 H.
+induction H; eauto.
+* eapply concat_seq; eauto.
+* pose proof (concat_seq c (While b c) s1 s2 s3 IHeval_com1 IHeval_com2 ).
+  apply (Steps_some (While b c) s1 (If b (Seq c (While b c)) Skip) s1 Skip s3); eauto.
+  (** - auto. (** apply  Step_while.**)
+  - eauto. pose proof (Step_if_true b (Seq c (While b c)) Skip s1 H). eauto. **)
+Qed.
+
+Lemma steps_com_skip: forall s1 s2, steps_com Skip s1 Skip s2 -> s1 = s2.
+Proof.
+intros.
+myinv H.
+- reflexivity.
+- myinv H0.
+Qed.
+
+
+Theorem small_to_big:
+  forall c s s',
+   steps_com c s Skip s' -> eval_com c s s'.
+Proof.
+intros. remember Skip as ss. induction H;subst;auto.
+  specialize (IHsteps_com (@eq_refl _ Skip)).
+  revert dependent s''.
+  induction H.
+  - intros. inversion IHsteps_com; auto.
+  - intros. rename s'' into f. myinv IHsteps_com. myinv H0. 
+    econstructor; [| apply H6].
+    apply IHstep_com; eauto.
+    apply  big_to_small. auto.
+  - intros.  
+    pose proof (Eval_skip s). econstructor.
+    + apply H.
+    + apply IHsteps_com.
+  - intros. auto.
+  - intros. auto.
+  - intros. myinv IHsteps_com; myinv H6; eauto.
+Qed.
+
+Theorem big_small_agree:
+ forall c s s',
+   eval_com c s s' <-> steps_com c s Skip s'.
+Proof.
+   Hint Immediate big_to_small small_to_big.
+   crush.
+Qed.
+
