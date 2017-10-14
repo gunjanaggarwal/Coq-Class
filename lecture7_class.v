@@ -451,7 +451,7 @@ Fixpoint merge (xs:list nat) : list nat -> list nat :=
          match ys with 
            | nil => x::xs'
            | y::ys' => if nat_lte x y then 
-                         x :: (merge xs' (y::ys'))
+                         x :: (merge xs' ys)
                        else 
                          y :: (inner_merge ys')
          end)
@@ -669,3 +669,160 @@ Eval compute in merge_sort [3;2;7;8].
 5.  Show that sort_corr xs (merge_sort xs)
 
 *)
+
+
+Lemma result_is_sorted: forall (xs: list nat) (a:nat),
+sorted xs -> list_all (le a) xs -> sorted (a::xs).
+Proof.
+Print sorted.
+intros.
+remember (a::xs) as xs'.
+destruct xs'.
+- crush.
+- crush.
+Qed.
+
+Lemma first_elem_isless: forall (xs: list nat) (a: nat),
+ sorted (a::xs) -> list_all (le a) (a::xs).
+Proof.
+crush.
+Qed.
+
+Definition merge_inner_merge mm x xs:=
+(fix inner_mergeg  (ys : list nat) : list nat :=
+          match ys with
+          | [] => x :: xs
+          | y :: ys' =>
+              if nat_lte x y
+              then x ::mm
+              else y :: inner_mergeg ys'
+          end).
+Print merge.
+
+Lemma or_remove_mid {A B C}: A  \/ C -> A \/  B \/ C.
+tauto.
+Qed.
+
+
+Lemma elem_eitherin_xs_or_ys': forall (xs ys mm : list nat) (x a : nat),
+(In a mm -> In a xs \/ In a ys) ->
+  In a (merge_inner_merge mm x xs ys) -> In a (x::xs) \/ In a ys.
+Proof.
+intros.
+induction ys as [| y ys Hind].
+- simpl in *. auto.
+- simpl in *. remember (nat_lte x y). destruct s.
+  * crush .
+  * simpl in *. 
+    destruct (Nat.eq_dec y a);[crush|].
+    destruct H0; [crush|].
+    apply or_remove_mid.
+    apply Hind; auto. crush.
+Qed.
+(*
+Lemma elem_eitherin_xs_or_ys': forall (xs ys mm : list nat) (x a : nat),
+(forall b, In b mm -> In b xs \/ In b ys) ->
+  In a (merge_inner_merge mm x xs ys) -> In a (x::xs) \/ In a ys.
+Proof.
+intros.
+induction ys as [| y ys Hind].
+- simpl in *. auto.
+- simpl in *. remember (nat_lte x y). destruct s.
+  * crush . apply H in H1. crush.
+  * simpl in *. 
+    destruct (Nat.eq_dec y a);[crush|].
+    destruct H0; [crush|].
+    apply or_remove_mid.
+    apply Hind; auto.
+    
+    crush.
+apply Hind in H1; crush.
+    Focus 2.
+    apply H in H2.
+
+Abort.
+*)
+
+Lemma elem_eitherin_xs_or_ys: forall (xs ys : list nat) (a: nat),
+  In a (merge xs ys) -> In a xs \/ In a ys.
+Proof.
+intro xs.
+induction xs.
+- intros. simpl in *. auto.
+- intros. simpl in *.
+  pose proof (elem_eitherin_xs_or_ys' ) as XX.
+  unfold merge_inner_merge in XX.
+  specialize (fun py pp => XX xs ys (merge xs ys) a a0 pp py).
+  pose proof (XX H).
+  apply XX in H.
+  simpl in *.
+Check (eq_refl:
+((fix inner_merge (ys : list nat) : list nat :=
+          match ys with
+          | [] => a :: xs
+          | y :: ys' =>
+              if nat_lte a y then a :: merge xs ys else y :: inner_merge ys'
+          end) =
+(fix inner_mergeg (ys : list nat) : list nat :=
+           match ys with
+           | [] => a :: xs
+           | y :: ys' =>
+               if nat_lte a y then a :: merge xs ys else y :: inner_mergeg ys'
+           end))
+
+).
+
+  apply XX in H.
+
+Check (@In nat a0
+    ((fix inner_merge (ys : list nat) : list nat :=
+        match ys return (list nat) with
+        | nil => @cons nat a xs
+        | cons y ys' =>
+            match nat_lte a y return (list nat) with
+            | left _ => @cons nat a (merge xs ys)
+            | right _ => @cons nat y (inner_merge ys')
+            end
+        end) ys)).
+
+  apply XX in H.
+
+ destruct ys.
+ + crush.
+ + remember (nat_lte a0 n). destruct (nat_lte a0 n); crush.
+
+   remember ((fix inner_merge (ys : list nat) : list nat :=
+           match ys with
+           | [] => a0 :: xs
+           | y :: ys' =>
+               if nat_lte a0 y
+               then a0 :: merge xs (y :: ys')
+               else y :: inner_merge ys'
+           end)) as inner_merge_fn.
+   induction ys.
+    * crush.
+    *
+
+
+Lemma add_smallest_element: forall (xs ys : list nat) (a: nat),
+    list_all (le a) (xs) -> 
+    list_all (le a) (ys) ->  list_all (le a) (merge xs ys).
+Proof.
+  intros xs ys. remember ( merge xs ys).
+  induction l.
+  + crush.
+  + subst. crush.
+Abort.
+
+Lemma merge_preserves_sorted : forall xs ys,
+   sorted xs -> sorted ys -> sorted (merge xs ys).
+Proof.
+Print merge.
+induction xs.
+  * simpl in *. auto.
+  * crush. destruct ys.
+    + apply (result_is_sorted xs a H1 H2).
+    + destruct (nat_lte a n).
+      - pose proof (first_elem_isless ys n H0).
+        pose proof (list_lte_nm a n (n::ys) l H).
+        pose proof (IHxs (n::ys) H1 H0). 
